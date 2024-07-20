@@ -1,0 +1,115 @@
+version: "3.9"
+services:
+  mongodb:
+    image: mongodb/mongodb-community-server
+    container_name: mongodb
+    restart: on-failure
+    volumes:
+      - ../data:/var/lib/mongodb
+    ports:
+      - "27017:27017"
+  db:
+    image: mysql:latest
+    container_name: db
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+    volumes:
+      - ../data:/var/lib/mysql
+    ports:
+      - "3306:3306"
+
+  config-server:
+    build:
+      dockerfile: ./Dockerfile
+      context: ./configuration-server
+    container_name: config-server
+    ports:
+      - "8888:8888"
+    volumes:
+      - ./configuration-server:/app
+
+  eureka-server:
+    build:
+      dockerfile: ./Dockerfile
+      context: ./eureka-server
+    container_name: eureka-server
+    ports:
+      - "8761:8761"
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8761/actuator/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  student-service:
+    build:
+      dockerfile: ./Dockerfile
+      context: ./ms-student
+    depends_on:
+      - mongodb
+      - eureka-server
+    volumes:
+      - ./ms-student:/app
+    environment:
+      - "eureka.client.serviceUrl.defaultZone=http://eureka-server:8761/eureka/"
+    ports:
+      - "8082:8082"
+    restart: on-failure
+
+  ms-school:
+    build:
+      dockerfile: ./Dockerfile
+      context: ./ms-school
+    depends_on:
+      - mongodb
+      - eureka-server
+    volumes:
+      - ./ms-school:/app
+    environment:
+      - "eureka.client.serviceUrl.defaultZone=http://eureka-server:8761/eureka/"
+    ports:
+      - "8084:8084"
+    restart: on-failure
+
+  gateway:
+    build:
+      dockerfile: ./Dockerfile
+      context: ./gateway
+    depends_on:
+      - config-server
+    ports:
+      - "8080:8080"
+    restart: on-failure
+    volumes:
+      - ./gateway:/app
+
+  authdb:
+    image: postgres:16.2
+    volumes:
+      - ./auth_data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: authdb
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: keycloak 
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:23.0.6
+    command: start --http-port 8180
+    environment:
+      KC_HOSTNAME: keycloak
+      KC_HOSTNAME_PORT: 8180
+      KC_HOSTNAME_STRICT_BACKCHANNEL: false
+      KC_HTTP_ENABLED: true
+      KC_HOSTNAME_STRICT_HTTPS: false
+      KC_HEALTH_ENABLED: true
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://authdb/authdb
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: keycloak
+    ports:
+      - 8180:8180
+    restart: always
+    depends_on:
+      - authdb

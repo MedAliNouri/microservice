@@ -1,0 +1,12 @@
+#spring:
+#  security:
+#    oauth2:
+#      client:
+#        provider:
+#          keycloak:
+#            issuer-uri: http://keycloak:8180/realms/microservice
+#        registration:
+#          keycloak:
+#            client-id: microservice-app
+#            client-secret: RqyfglBMU0UVy46IeYXovQAkA6tYFZfc
+#            scope: openid,profile,emaile
